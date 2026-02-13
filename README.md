@@ -18,26 +18,51 @@ This plugin provides 7 specialized skills that guide you through the complete GT
 
 ## Installation
 
-### Option 1: Claude Plugin Marketplace (Recommended)
+### Option 1: Clone and Add to Workspace
+
+1. Clone the repository:
+```bash
+git clone https://github.com/aimonk2025/google-tag-manager-automation.git
+```
+
+2. Copy the `skills` folder to your project's `.claude` directory:
+```bash
+# Navigate to your project
+cd your-project
+
+# Create .claude directory if it doesn't exist
+mkdir -p .claude
+
+# Copy the skills
+cp -r path/to/google-tag-manager-automation/skills .claude/
+```
+
+Your project structure should look like:
+```
+your-project/
+├── .claude/
+│   └── skills/
+│       ├── gtm-analytics-audit/
+│       ├── gtm-dom-standardization/
+│       ├── gtm-strategy/
+│       ├── gtm-setup/
+│       ├── gtm-implementation/
+│       ├── gtm-testing/
+│       └── gtm-reporting/
+├── src/
+└── ...
+```
+
+### Option 2: Claude Plugin Marketplace
 
 ```bash
 /plugin marketplace add aimonk2025/google-tag-manager-automation
 ```
 
-### Option 2: Local Installation
+### Option 3: Local Plugin Directory
 
 ```bash
 claude --plugin-dir "path/to/google-tag-manager-automation"
-```
-
-### Option 3: Using npx Skills Installers
-
-```bash
-# Using openskills
-npx openskills install aimonk2025/google-tag-manager-automation
-
-# Using Vercel skills
-npx skills add aimonk2025/google-tag-manager-automation
 ```
 
 ## Usage
