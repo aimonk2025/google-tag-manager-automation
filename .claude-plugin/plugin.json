@@ -1,0 +1,10 @@
+{
+  "name": "google-tag-manager-automation",
+  "version": "1.0.0",
+  "description": "Comprehensive GTM automation toolkit for analytics implementation. Includes skills for auditing trackable elements, DOM standardization, tracking strategy, dataLayer implementation, GTM setup, testing, and reporting.",
+  "author": "admin",
+  "pluginName": "google-tag-manager-automation",
+  "skills": {
+    "paths": ["./skills"]
+  }
+}

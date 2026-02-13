@@ -1,0 +1,101 @@
+{
+  "name": "SaaS Product Tracking Template",
+  "description": "Pre-built GTM configuration for SaaS product analytics tracking trial starts, feature usage, and upgrades",
+  "events": [
+    {
+      "name": "cta_click",
+      "description": "Tracks CTA button clicks across the site",
+      "parameters": ["cta_location", "cta_type", "cta_text", "cta_destination"],
+      "priority": "P0"
+    },
+    {
+      "name": "trial_start",
+      "description": "User starts free trial",
+      "parameters": ["plan_name", "trial_duration", "signup_source"],
+      "priority": "P0"
+    },
+    {
+      "name": "account_created",
+      "description": "New account created",
+      "parameters": ["account_type", "signup_method", "referral_source"],
+      "priority": "P0"
+    },
+    {
+      "name": "feature_usage",
+      "description": "Product feature used",
+      "parameters": ["feature_name", "usage_type", "feature_category"],
+      "priority": "P1"
+    },
+    {
+      "name": "upgrade_click",
+      "description": "User clicks upgrade CTA",
+      "parameters": ["current_plan", "target_plan", "upgrade_location"],
+      "priority": "P0"
+    },
+    {
+      "name": "plan_selected",
+      "description": "Pricing plan chosen",
+      "parameters": ["plan_name", "plan_price", "billing_frequency"],
+      "priority": "P0"
+    },
+    {
+      "name": "navigation_click",
+      "description": "Navigation link clicked",
+      "parameters": ["nav_location", "nav_type", "nav_text", "nav_destination"],
+      "priority": "P1"
+    },
+    {
+      "name": "form_submit",
+      "description": "Form submitted",
+      "parameters": ["form_name", "form_location", "form_type"],
+      "priority": "P0"
+    }
+  ],
+  "recommendedReports": [
+    {
+      "name": "Trial Conversion Funnel",
+      "type": "GA4 Funnel Exploration",
+      "steps": [
+        "page_view (Pricing)",
+        "plan_selected",
+        "trial_start",
+        "account_created"
+      ]
+    },
+    {
+      "name": "Feature Adoption Dashboard",
+      "type": "Custom Dashboard",
+      "metrics": [
+        "feature_usage count by feature_name",
+        "Unique users by feature_name",
+        "Feature usage trend over time"
+      ]
+    },
+    {
+      "name": "Upgrade Conversion",
+      "type": "GA4 Exploration",
+      "metrics": [
+        "upgrade_click by current_plan",
+        "Conversion rate: upgrade_click → purchase",
+        "Time to upgrade from trial_start"
+      ]
+    }
+  ],
+  "audienceDefinitions": [
+    {
+      "name": "Active Trial Users",
+      "criteria": "trial_start in last 14 days AND feature_usage count >= 3",
+      "useCase": "High engagement trial users - target with upgrade messaging"
+    },
+    {
+      "name": "Feature Power Users",
+      "criteria": "feature_usage count >= 10 in last 7 days",
+      "useCase": "Identify expansion opportunities and testimonial candidates"
+    },
+    {
+      "name": "Upgrade Intent",
+      "criteria": "upgrade_click OR plan_selected in last 7 days",
+      "useCase": "Users showing upgrade interest - sales follow-up priority"
+    }
+  ]
+}
