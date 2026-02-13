@@ -18,8 +18,6 @@ This plugin provides 7 specialized skills that guide you through the complete GT
 
 ## Installation
 
-### Option 1: Clone and Add to Workspace
-
 1. Clone the repository:
 ```bash
 git clone https://github.com/aimonk2025/google-tag-manager-automation.git
@@ -51,18 +49,6 @@ your-project/
 │       └── gtm-reporting/
 ├── src/
 └── ...
-```
-
-### Option 2: Claude Plugin Marketplace
-
-```bash
-/plugin marketplace add aimonk2025/google-tag-manager-automation
-```
-
-### Option 3: Local Plugin Directory
-
-```bash
-claude --plugin-dir "path/to/google-tag-manager-automation"
 ```
 
 ## Usage
