@@ -671,6 +671,11 @@ Pre-built GTM config for e-commerce tracking:
 - product_view, add_to_cart, checkout_start
 - purchase_complete, product_search
 
+## Supporting Files
+
+- `template.md` - Framework-specific dataLayer push code patterns and GTM API payload templates
+- `examples/sample.md` - Example implementation output showing before/after code changes and console output
+
 ### assets/templates/lead-generation.json
 Pre-built GTM config for lead-gen tracking:
 - form_start, form_submit, content_download

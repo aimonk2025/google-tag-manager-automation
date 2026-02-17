@@ -448,6 +448,7 @@ Quick reference for common elements:
 ## Reference Files
 
 - `references/element-patterns.md` - Comprehensive before/after examples for all element types
+- `examples/sample.md` - Example standardization output showing before/after code changes and naming convention table
 
 ## Execution Checklist
 

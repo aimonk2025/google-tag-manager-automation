@@ -594,6 +594,11 @@ Template for executive/business summary
 
 **Business**: "Understanding user journey through site to optimize content flow and increase engagement"
 
+## Supporting Files
+
+- `template.md` - Documentation templates Claude fills in (event-schema, implementation-summary, reporting-capabilities, audience-definitions, executive-summary)
+- `examples/sample.md` - Example reporting output including console output and event-schema.md excerpt
+
 ## Execution Checklist
 
 - [ ] Implementation details loaded
