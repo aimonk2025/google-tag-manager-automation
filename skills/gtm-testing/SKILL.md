@@ -1,537 +1,433 @@
 ---
 name: gtm-testing
-description: Comprehensive GTM tracking testing and validation including browser console testing, GTM Preview mode validation, GA4 DebugView verification, and automated test generation. Use when users need to "test GTM tracking", "validate dataLayer events", "debug GTM", "check if tracking works", "test in Preview mode", or troubleshoot tracking issues. Provides interactive testing guidance and generates Playwright/Cypress automated tests.
+description: Comprehensive GTM tracking testing and validation including automated Playwright headless testing, browser console testing, GTM Preview mode validation, and GA4 DebugView verification. Use when users need to "test GTM tracking", "validate dataLayer events", "debug GTM", "check if tracking works", "automated tracking tests", "run tracking tests without opening browser", or troubleshoot tracking issues. Prioritises automated testing over manual when possible.
 ---
 
 # GTM Testing - Validation & Debugging
 
-Guide users through comprehensive testing of GTM tracking implementation using a three-tier validation approach.
+Guide users through comprehensive testing of GTM tracking implementation. Prefers automated headless testing over manual steps wherever possible.
 
 ## Testing Philosophy
 
-**Tier 1**: Browser Console (dataLayer verification)
-**Tier 2**: GTM Preview Mode (tag firing verification)
-**Tier 3**: GA4 DebugView (end-to-end verification)
+Four-tier validation approach, ordered by automation level:
 
-Each tier validates different aspects. All three must pass for complete validation.
+- **Tier 0 (Automated)**: Playwright headless tests (no browser needed, fully automated)
+- **Tier 1 (Manual)**: Browser Console dataLayer verification
+- **Tier 2 (Manual)**: GTM Preview Mode tag firing verification
+- **Tier 3 (Manual)**: GA4 DebugView end-to-end verification
 
-## Workflow
+**Always start with Tier 0** if the user asks "can you do it yourself" or wants automated testing. Fall back to manual tiers only for GTM container and GA4 validation, which require a browser session.
 
-### Phase 1: Preparation
+---
 
-**Step 1.1: Load Implementation Context**
-```
-Check for gtm-implementation-log.json (from gtm-implementation skill):
-- If exists → Load events that were implemented
-- If missing → Ask user which events to test
+## Tier 0: Automated Playwright Testing (Preferred)
 
-Generate custom test plan based on implemented events.
-```
+Run this tier first. It requires no browser interaction from the user and can be run entirely by Claude.
 
-**Step 1.2: Start Development Server**
-```
-Verify dev server is running:
-- Check if localhost:3000 (or configured port) is accessible
-- If not running → Guide user to start: npm run dev
+### Prerequisites Check
 
-Why: Testing requires live site to interact with elements
-```
+```bash
+# Check if Playwright is installed
+npx playwright --version
 
-**Step 1.3: Open Browser DevTools**
-```
-Guide user:
-1. Open site in browser (Chrome recommended)
-2. Open DevTools: F12 or Cmd+Option+I (Mac) / Ctrl+Shift+I (Windows)
-3. Go to Console tab
-4. Clear console: Ctrl+L or Cmd+K
+# If not installed as a project dependency:
+npm install --save-dev playwright
+npx playwright install chromium
+
+# Check if dev server is running
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3000
+# If not running, start it:
+# npm run dev
 ```
 
-### Phase 2: Tier 1 - Browser Console Testing (DataLayer)
+### Core Helper: captureDataLayerEvents
 
-Test that dataLayer.push() events fire correctly.
+This helper intercepts all `dataLayer.push()` calls during an action and returns the captured events. Use it in every test.
 
-**Step 2.1: Check DataLayer Exists**
+```javascript
+async function captureDataLayerEvents(page, action) {
+  await page.evaluate(() => {
+    window.__testEvents = [];
+    const original = window.dataLayer.push.bind(window.dataLayer);
+    window.dataLayer.push = function (...args) {
+      window.__testEvents.push(args[0]);
+      return original(...args);
+    };
+  });
+
+  await action();
+  await page.waitForTimeout(300);
+
+  return await page.evaluate(() => window.__testEvents || []);
+}
 ```
-In browser console, type:
-window.dataLayer
 
-Expected output:
-[{...}, {...}, ...]  ← Array of events
+### Key Patterns for Common Element Types
 
-If undefined:
-→ Error: GTM not installed or dataLayer not initialized
-→ Check that GTM container snippet is in <head>
+**Next.js Link components (navigation, course buttons):**
+Do NOT use `page.click()` — it triggers navigation before the onClick handler fires. Use `dispatchEvent` instead:
+```javascript
+await page.evaluate(() => {
+  const btn = document.querySelector('a.js-module_nav');
+  if (btn) btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+});
+await page.waitForTimeout(400);
 ```
 
-**Step 2.2: Monitor DataLayer in Real-Time**
+**Outbound links (href to external domains):**
+Block the navigation so the page stays loaded while the event fires:
+```javascript
+await page.route('**github.com**', route => route.abort());
+// Then use dispatchEvent as above
 ```
-In console, run:
-window.dataLayer.push = new Proxy(window.dataLayer.push, {
-  apply: function(target, thisArg, argumentsList) {
-    console.log('📊 DataLayer Push:', argumentsList[0])
-    return target.apply(thisArg, argumentsList)
+
+**Regular buttons and internal actions:**
+Standard click works fine:
+```javascript
+await page.locator('#element-id').click({ force: true });
+```
+
+### Test Script Template
+
+Create `scripts/test-tracking.js` in the project root:
+
+```javascript
+const { chromium } = require('playwright');
+
+const BASE_URL = 'http://localhost:3000';
+const results = { passed: [], failed: [], warnings: [] };
+
+function pass(test, detail = '') {
+  results.passed.push({ test, detail });
+  console.log(`  PASS  ${test}${detail ? ' - ' + detail : ''}`);
+}
+function fail(test, detail = '') {
+  results.failed.push({ test, detail });
+  console.log(`  FAIL  ${test}${detail ? ' - ' + detail : ''}`);
+}
+function warn(test, detail = '') {
+  results.warnings.push({ test, detail });
+  console.log(`  WARN  ${test}${detail ? ' - ' + detail : ''}`);
+}
+
+async function captureDataLayerEvents(page, action) {
+  await page.evaluate(() => {
+    window.__testEvents = [];
+    const original = window.dataLayer.push.bind(window.dataLayer);
+    window.dataLayer.push = function (...args) {
+      window.__testEvents.push(args[0]);
+      return original(...args);
+    };
+  });
+  await action();
+  await page.waitForTimeout(300);
+  return await page.evaluate(() => window.__testEvents || []);
+}
+
+async function runTests() {
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext();
+
+  console.log('\n=== GTM dataLayer Event Tests ===\n');
+
+  // TEST: dataLayer initialisation
+  console.log('Test: dataLayer initialisation');
+  {
+    const page = await context.newPage();
+    await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+    const hasDataLayer = await page.evaluate(() => Array.isArray(window.dataLayer));
+    hasDataLayer ? pass('dataLayer initialised') : fail('dataLayer not found');
+    const gtmEvent = await page.evaluate(() => window.dataLayer.find(e => e['gtm.start']));
+    gtmEvent ? pass('GTM bootstrap event present') : fail('GTM bootstrap event missing - container may not be installed');
+    await page.close();
   }
-})
 
-This logs every dataLayer.push() call in console.
+  // TEST: cta_click event
+  // Adjust selector to match your actual element ID
+  console.log('\nTest: cta_click event');
+  {
+    const page = await context.newPage();
+    await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+    const events = await captureDataLayerEvents(page, async () => {
+      const el = await page.$('#your-cta-id');
+      if (el) await page.evaluate(el => el.dispatchEvent(new MouseEvent('click', { bubbles: true })), el);
+    });
+    const e = events.find(e => e.event === 'cta_click');
+    e ? pass('cta_click fired', `location=${e.cta_location}`) : fail('cta_click did not fire');
+    await page.close();
+  }
+
+  // Add more tests following the same pattern...
+
+  // RESULTS
+  await browser.close();
+  console.log('\n=== RESULTS ===');
+  console.log(`  Passed:   ${results.passed.length}`);
+  console.log(`  Failed:   ${results.failed.length}`);
+  console.log(`  Warnings: ${results.warnings.length}`);
+  if (results.failed.length > 0) {
+    console.log('\nFailed:');
+    results.failed.forEach(f => console.log(`  - ${f.test}: ${f.detail}`));
+  }
+  process.exit(results.failed.length > 0 ? 1 : 0);
+}
+
+runTests().catch(err => { console.error('Fatal:', err.message); process.exit(1); });
 ```
 
-**Step 2.3: Test Each Event**
+### Finding Correct Element Selectors
 
-For each implemented event, provide specific testing instructions:
+Before writing tests, always inspect what's actually rendered. Use this discovery script:
 
-**Example: CTA Click Event**
+```javascript
+// Add to test script or run as a separate debug script
+const page = await context.newPage();
+await page.goto(`${BASE_URL}/your-page`, { waitUntil: 'networkidle' });
+
+const tracked = await page.evaluate(() => {
+  return Array.from(document.querySelectorAll('[id], .js-track, [data-track]')).map(el => ({
+    id: el.id,
+    tag: el.tagName,
+    class: el.className,
+    text: el.textContent.trim().substring(0, 40),
+    href: el.getAttribute('href'),
+  }));
+});
+console.log(JSON.stringify(tracked, null, 2));
 ```
-Test: CTA Click Event
 
-1. Click the "Get Started" button in hero section
-2. Check console for:
+### Validating GTM Container Configuration via API
 
-Expected output:
-📊 DataLayer Push: {
+Before running browser tests, verify the GTM container itself is correctly configured. This catches orphaned trigger references and missing measurement IDs.
+
+```javascript
+// scripts/audit-gtm-coverage.js
+// Uses googleapis + gtm-credentials.json + gtm-token.json + gtm-config.json
+
+// Critical checks:
+// 1. Base GA4 config tag (googtag) - must fire on Page View trigger
+//    If firingTriggerId references a non-existent trigger, NO pages are tracked
+// 2. GA4 event tags (gaawe) - must have measurementIdOverride set
+//    Parameter key is "measurementIdOverride" NOT "measurementId"
+// 3. All triggers must be used by at least one tag
+// 4. All tags must have at least one firing trigger
+```
+
+**Critical GTM API bug to watch for:** The `gaawe` (GA4 Event) tag type uses `measurementIdOverride` and `eventSettingsTable` (not `measurementId` or `eventParameters`). The correct parameter structure is:
+
+```javascript
+// CORRECT structure for gaawe tags via API
+{
+  type: 'gaawe',
+  parameter: [
+    { type: 'boolean', key: 'sendEcommerceData', value: 'false' },
+    { type: 'template', key: 'eventName', value: 'your_event_name' },
+    { type: 'template', key: 'measurementIdOverride', value: 'G-XXXXXXXXXX' },
+    {
+      type: 'list',
+      key: 'eventSettingsTable',
+      list: [
+        {
+          type: 'map',
+          map: [
+            { type: 'template', key: 'parameter', value: 'param_name' },
+            { type: 'template', key: 'parameterValue', value: '{{DL - Variable Name}}' },
+          ],
+        },
+      ],
+    },
+  ],
+}
+```
+
+### Running and Interpreting Results
+
+```bash
+node scripts/test-tracking.js
+```
+
+Exit code `0` = all tests passed. Exit code `1` = failures exist.
+
+**Result types:**
+- `PASS` - Event fired with correct parameters
+- `FAIL` - Event did not fire, or required element not found
+- `WARN` - Component has tracking code but is not rendered on any page yet (not a bug)
+
+**Common failure causes and fixes:**
+
+| Failure | Cause | Fix |
+|---------|-------|-----|
+| `dataLayer not found` | GTM snippet missing from `<head>` | Add GTM container snippet to layout |
+| Event didn't fire | Element uses wrong selector in test | Use discovery script to find real ID/class |
+| Event fired but page unloaded | Clicking a Next.js `<Link>` | Use `dispatchEvent` not `page.click()` |
+| Outbound click not captured | Page navigated away before capture | Use `page.route()` to block external navigation |
+| No events on page load | GTM base tag has orphaned trigger reference | Fix via GTM API or UI - re-assign to Page View trigger |
+
+---
+
+## Tier 1: Browser Console Testing (Manual)
+
+Use when you want to manually verify events while interacting with the site.
+
+### Step 1: Check dataLayer Exists
+
+```javascript
+window.dataLayer
+// Expected: [...] array
+// If undefined: GTM not installed
+```
+
+### Step 2: Monitor dataLayer in Real-Time
+
+```javascript
+const _push = window.dataLayer.push.bind(window.dataLayer);
+window.dataLayer.push = function(...args) {
+  console.log('%c dataLayer.push', 'background:#222;color:#0f0;padding:2px 6px', args[0]);
+  return _push(...args);
+};
+// Now every push is logged in green
+```
+
+### Step 3: Test Each Event
+
+Click elements one at a time and verify the console output matches expected:
+
+```
+Expected for cta_click:
+{
   event: "cta_click",
   cta_location: "hero",
   cta_type: "primary",
-  cta_text: "Get Started",
-  cta_destination: "/signup"
+  cta_text: "Start Course",
+  cta_destination: "/claude-code"
 }
-
-✓ Pass: All parameters present and correct
-✗ Fail: Event missing or parameters wrong
 ```
 
-**Example: Form Submit Event**
-```
-Test: Form Submit Event
+### Validation Checklist - Tier 1
 
-1. Fill out newsletter form in footer
-2. Click "Subscribe" button
-3. Check console for:
+- [ ] `window.dataLayer` is an array
+- [ ] GTM bootstrap event (`gtm.start`) present
+- [ ] Each event fires with correct `event` name
+- [ ] All required parameters present and non-empty
+- [ ] No duplicate events on single click
+- [ ] No JavaScript errors in console
 
-Expected output:
-📊 DataLayer Push: {
-  event: "form_submit",
-  form_name: "newsletter",
-  form_location: "footer",
-  form_type: "email_capture"
-}
+---
 
-✓ Pass: Event fires on submit with correct parameters
-✗ Fail: Event doesn't fire or parameters missing
-```
+## Tier 2: GTM Preview Mode (Manual)
 
-**Step 2.4: Validation Checklist**
-```
-Browser Console Validation:
+Confirms the GTM container receives events and fires tags. Requires GTM UI access.
 
-[ ] dataLayer exists (window.dataLayer is defined)
-[ ] CTA click events fire with all parameters
-[ ] Form submit events fire with correct form data
-[ ] Navigation click events fire on link clicks
-[ ] Video events fire on play/pause (if applicable)
-[ ] Parameters match expected values (location, type, text, etc.)
-[ ] No duplicate events (event fires once per action)
-[ ] No JavaScript errors in console
+### Setup
 
-If all pass → Continue to Tier 2 (GTM Preview)
-If any fail → Debug issues before proceeding
-```
+1. Go to [tagmanager.google.com](https://tagmanager.google.com)
+2. Select container
+3. Click **Preview**
+4. Enter site URL, click **Connect**
+5. A debug panel appears at the bottom of your site
 
-### Phase 3: Tier 2 - GTM Preview Mode (Tag Firing)
+### What to Verify
 
-Test that GTM tags fire correctly in response to dataLayer events.
-
-**Step 3.1: Enable GTM Preview Mode**
-```
-Guide user:
-1. Go to Google Tag Manager: https://tagmanager.google.com
-2. Select your container (GTM-XXXXXX)
-3. Click "Preview" button in top right
-4. Enter your site URL (e.g., http://localhost:3000)
-5. Click "Connect"
-
-Expected: New tab opens with your site + GTM Preview panel at bottom
-```
-
-**Step 3.2: Test Event → Trigger → Tag Flow**
-
-For each event, verify the complete flow:
-
-**Example: CTA Click Event**
-```
-Test: CTA Click → Tag Firing
-
-1. In Preview mode, ensure "Tag Assistant Connected" shows
-2. Click "Get Started" button on site
-3. In Preview panel, check "Summary" tab
-
-Expected flow:
-Event → Custom Event "CE - CTA Click" → Tag "GA4 - CTA Click"
-
-Verification:
-1. Event section shows "cta_click" custom event
-2. Triggers section shows "CE - CTA Click" (Fired)
-3. Tags section shows "GA4 - CTA Click" (Fired)
-
-✓ Pass: Event → Trigger → Tag all fire
-✗ Fail: Any step not firing
-```
-
-**Step 3.3: Verify Tag Parameters**
-```
-In Preview panel:
-1. Click on fired "GA4 - CTA Click" tag
-2. Go to "Event Parameters" tab
-
-Expected parameters in GA4 tag:
-- event_name: cta_click
-- cta_location: hero
-- cta_type: primary
-- cta_text: Get Started
-- cta_destination: /signup
-
-✓ Pass: All parameters present in GA4 tag
-✗ Fail: Missing parameters or wrong values
-```
-
-**Step 3.4: Validation Checklist**
-```
-GTM Preview Mode Validation:
-
-[ ] Preview mode connects successfully
-[ ] Custom events appear in event list
-[ ] Triggers fire in response to events
-[ ] Tags fire when triggers activate
-[ ] Tag parameters match dataLayer parameters
-[ ] GA4 Configuration tag fires on page load
-[ ] No tags firing unexpectedly
-[ ] No trigger errors shown
-
-If all pass → Continue to Tier 3 (GA4 DebugView)
-If any fail → Debug in GTM before proceeding
-```
-
-### Phase 4: Tier 3 - GA4 DebugView (End-to-End)
-
-Test that events reach GA4 and appear correctly in reports.
-
-**Step 4.1: Enable GA4 Debug Mode**
-```
-Two options to enable debug mode:
-
-Option A (Chrome Extension):
-1. Install "Google Analytics Debugger" extension
-2. Click extension icon to enable
-3. Page should reload
-
-Option B (URL Parameter):
-1. Add ?debug_mode=true to URL
-2. Example: http://localhost:3000?debug_mode=true
-
-Verification:
-Events will now appear in GA4 DebugView (not regular reports)
-```
-
-**Step 4.2: Open GA4 DebugView**
-```
-Guide user:
-1. Go to GA4: https://analytics.google.com/
-2. Select your property
-3. Go to "Admin" (bottom left)
-4. Under "Property", click "DebugView"
-
-Expected: Real-time event stream showing events from your site
-```
-
-**Step 4.3: Test Events in DebugView**
-
-**Example: CTA Click Event**
-```
-Test: CTA Click in GA4
-
-1. With DebugView open, click "Get Started" button on site
-2. Wait 1-3 seconds for event to appear
-3. Look for "cta_click" in event stream
-
-Expected in DebugView:
-Event name: cta_click
-Event parameters:
-  - cta_location: hero
-  - cta_type: primary
-  - cta_text: Get Started
-  - cta_destination: /signup
-
-Device: Your computer/browser
-Page: /
-
-✓ Pass: Event appears with all parameters
-✗ Fail: Event missing or parameters wrong
-```
-
-**Step 4.4: Verify Event Count**
-```
-In DebugView:
-- Event stream shows real-time events
-- "Event count by Event name" shows totals
-
-Test: Click same button 3 times
-
-Expected:
-"cta_click" event count increases to 3
-
-✓ Pass: Each click creates new event
-✗ Fail: Multiple clicks don't register
-```
-
-**Step 4.5: Validation Checklist**
-```
-GA4 DebugView Validation:
-
-[ ] Debug mode enabled (DebugView shows events)
-[ ] CTA click events appear in real-time
-[ ] Form submit events appear with correct parameters
-[ ] Navigation events appear on link clicks
-[ ] All event parameters visible in DebugView
-[ ] Event counts increment correctly
-[ ] No unexpected events firing
-[ ] Events associated with correct page paths
-
-If all pass → Tracking validated end-to-end ✓
-If any fail → Debug before publishing GTM container
-```
-
-### Phase 5: Common Issues & Debugging
-
-Provide troubleshooting for common problems:
-
-**Issue: dataLayer is undefined**
-```
-Cause: GTM container snippet not installed
-
-Solution:
-1. Check <head> tag has GTM snippet
-2. Verify GTM container ID is correct (GTM-XXXXXX)
-3. Check GTM container is published (not just in Preview)
-4. Clear browser cache and reload
-```
-
-**Issue: Event fires but trigger doesn't activate**
-```
-Cause: Trigger condition doesn't match event
-
-Debug:
-1. In GTM Preview, click failed trigger
-2. Check "Conditions" tab
-3. Verify event name matches exactly (case-sensitive)
-
-Fix:
-- Event name in code: "cta_click"
-- Trigger condition: {{Event}} equals "cta_click"
-- Must match exactly (no "CTA_CLICK" or "cta_Click")
-```
-
-**Issue: Trigger fires but tag doesn't**
-```
-Cause: Tag configuration error
-
-Debug:
-1. In GTM Preview, click tag that didn't fire
-2. Check "Errors" or "Not Fired" status
-3. Review tag configuration
-
-Common fixes:
-- Ensure GA4 Configuration tag exists
-- Check GA4 Measurement ID is correct
-- Verify tag is assigned to trigger
-- Check tag doesn't have blocking exception rules
-```
-
-**Issue: Event appears in Preview but not DebugView**
-```
-Cause: Debug mode not enabled OR wrong GA4 property
-
-Debug:
-1. Confirm ?debug_mode=true in URL
-2. Verify GA4 Measurement ID in GTM matches DebugView property
-3. Wait 10-15 seconds (events can be delayed)
-4. Check browser console for GA4 errors
-
-Fix:
-- Enable debug mode properly
-- Use correct GA4 property
-- Publish GTM container (not just preview)
-```
-
-**Issue: Parameters missing in GA4**
-```
-Cause: Parameters not mapped in GA4 tag
-
-Debug:
-1. In GTM, open "GA4 - CTA Click" tag
-2. Check "Event Parameters" section
-3. Verify each parameter is mapped:
-   - Parameter Name: cta_location
-   - Value: {{DLV - CTA Location}}
-
-Fix:
-- Add missing parameter mappings
-- Ensure Data Layer Variables exist
-- Check variable names match exactly
-```
-
-### Phase 6: Testing Summary Report
-
-After all testing complete, generate summary:
+For each event, the Preview panel should show:
 
 ```
-=== GTM Tracking Testing Complete ===
-
---- Tier 1: Browser Console (DataLayer) ---
-✓ dataLayer exists and initialized
-✓ CTA click events fire (12/12 tested)
-✓ Form submit events fire (3/3 tested)
-✓ Navigation click events fire (8/8 tested)
-✓ All parameters present and correct
-✓ No JavaScript errors
-
-Status: PASS ✓
-
---- Tier 2: GTM Preview Mode (Tags) ---
-✓ Preview mode connected successfully
-✓ Custom events trigger correctly (3/3)
-✓ Tags fire in response to triggers (3/3)
-✓ Tag parameters match dataLayer
-✓ GA4 Configuration tag fires
-
-Status: PASS ✓
-
---- Tier 3: GA4 DebugView (End-to-End) ---
-✓ Debug mode enabled
-✓ Events appear in DebugView (3/3)
-✓ All event parameters visible
-✓ Event counts increment correctly
-✓ Events on correct pages
-
-Status: PASS ✓
-
-=== Overall Testing Status: PASS ✓ ===
-
-All 3 tiers validated successfully.
-
---- Next Steps ---
-1. Publish GTM container:
-   → GTM → Submit → Publish
-
-2. Disable debug mode for production
-
-3. Monitor events in GA4 Reports (not DebugView):
-   → Reports → Engagement → Events
-
-4. Generate documentation:
-   → Invoke gtm-reporting skill
-
-Ready to document implementation? Invoke gtm-reporting skill.
+Event fired: "cta_click"
+  Triggers: CE - CTA Click  [FIRED]
+  Tags:      GA4 - CTA Click [FIRED]
 ```
+
+Click a fired tag to verify:
+- `measurementIdOverride` has the correct GA4 ID
+- All event parameters are populated (not empty `{{DL - ...}}` strings)
+
+### Validation Checklist - Tier 2
+
+- [ ] Preview mode connects successfully
+- [ ] GA4 Configuration tag fires on page load (not orphaned)
+- [ ] Each custom event appears in the event list
+- [ ] Correct trigger fires for each event
+- [ ] Correct tag fires for each trigger
+- [ ] Tag parameters show resolved values (not unresolved variable references)
+- [ ] No tags firing unexpectedly
+
+---
+
+## Tier 3: GA4 DebugView (Manual)
+
+Confirms events reach GA4 with correct parameters. Requires GA4 property access.
+
+### Enable Debug Mode
+
+Option A - URL parameter: append `?debug_mode=true` to the page URL
+
+Option B - Chrome extension: install **Google Analytics Debugger**, enable it
+
+### Open DebugView
+
+GA4 > Admin > Property > DebugView
+
+Events appear in real time as you interact with the site.
+
+### What to Verify
+
+- Event name appears (e.g., `cta_click`)
+- All parameters visible with correct values
+- `page_view` event fires on every page navigation
+- Event count increments on repeated actions
+
+### Validation Checklist - Tier 3
+
+- [ ] `page_view` events firing on all pages
+- [ ] Custom events appear within 1-3 seconds of firing
+- [ ] All event parameters visible and correctly valued
+- [ ] Events attributed to correct page paths
+- [ ] No unexpected events
+
+---
+
+## Common Issues Reference
+
+| Issue | Tier Found | Cause | Fix |
+|-------|-----------|-------|-----|
+| `dataLayer` undefined | 1 | GTM snippet missing | Add GTM snippet to `<head>` |
+| Event fires, trigger doesn't | 2 | Event name mismatch (case-sensitive) | Confirm trigger uses `{{_event}}` equals exact event name |
+| Trigger fires, tag doesn't | 2 | Orphaned trigger or misconfigured tag | Check tag has valid firing trigger assigned |
+| Page View tag never fires | 2 | Orphaned trigger reference on base tag | Re-assign base tag to a valid Page View trigger |
+| Parameters show as `{{DL - X}}` | 2 | Data Layer Variable not created | Create DLV with correct dataLayer key name |
+| Events in Preview, not DebugView | 3 | Wrong GA4 property or debug mode off | Verify Measurement ID matches, enable debug mode |
+| Parameters missing in GA4 | 3 | Not mapped in tag's eventSettingsTable | Add parameter mapping in GTM tag config |
+
+---
+
+## Full Workflow
+
+```
+1. Run Tier 0 (automated)
+   PASS → proceed to publish GTM
+   FAIL → fix code or GTM config, re-run
+
+2. Run Tier 1 (console) — optional manual spot-check
+   PASS → proceed
+   FAIL → fix before Tier 2
+
+3. Run Tier 2 (GTM Preview)
+   PASS → proceed
+   FAIL → fix GTM tags/triggers/variables
+
+4. Run Tier 3 (GA4 DebugView)
+   PASS → publish GTM container
+   FAIL → fix GA4 config or parameter mappings
+
+5. Publish GTM → GTM UI > Submit > Publish version
+6. Disable debug mode in production
+7. Monitor GA4 Reports > Engagement > Events
+```
+
+---
 
 ## References
 
-### references/debugging-guide.md
-Common GTM issues and solutions with step-by-step debugging
-
-### references/test-checklist.md
-Printable testing checklist template
-
-## Important Guidelines
-
-### Testing Best Practices
-
-**1. Test Incrementally**
-- Test each event individually
-- Don't test all events at once
-- Isolate issues to specific events
-
-**2. Clear Cache Between Tests**
-- Hard refresh: Ctrl+Shift+R (Windows) / Cmd+Shift+R (Mac)
-- Clears cached GTM container
-- Ensures latest configuration loads
-
-**3. Wait for Propagation**
-- GTM changes take 1-2 minutes to propagate to Preview
-- GA4 DebugView events can have 1-3 second delay
-- Be patient between changes and testing
-
-**4. Document Failures**
-- Screenshot console errors
-- Note which specific elements fail
-- Track error messages for debugging
-
-### Testing Workflow
-
-**Iterative Testing Loop**:
-```
-1. Implement tracking (gtm-implementation)
-2. Test in console (Tier 1)
-   → If fail: Fix code, repeat
-3. Test in GTM Preview (Tier 2)
-   → If fail: Fix GTM config, repeat
-4. Test in GA4 DebugView (Tier 3)
-   → If fail: Fix GA4 config, repeat
-5. All pass → Publish & document
-```
-
-**Don't Skip Tiers**:
-- Tier 1 failure = don't test Tier 2 yet
-- Tier 2 failure = don't test Tier 3 yet
-- Fix issues at lowest tier first
-
-### User Interaction
-
-**Guide Interactively**:
-```
-"I'll guide you through testing the CTA click event.
-
-Step 1: Open your site in Chrome
-Step 2: Open DevTools (press F12)
-Step 3: Click the 'Get Started' button
-
-Did you see the dataLayer event in console? (yes/no)"
-
-[Wait for user response]
-
-If yes → "Great! Let's move to GTM Preview..."
-If no → "Let's debug. Can you share what you see in console?"
-```
-
-**Confirm Each Step**:
-- Don't assume tests pass
-- Ask user to confirm results
-- Wait for user input before proceeding
-
-## Execution Checklist
-
-- [ ] Implementation context loaded
-- [ ] Development server running
-- [ ] Browser DevTools opened
-- [ ] Tier 1: dataLayer events validated
-- [ ] Tier 2: GTM Preview mode validated
-- [ ] Tier 3: GA4 DebugView validated
-- [ ] Common issues addressed
-- [ ] Testing summary generated
-- [ ] Publishing instructions provided
-
-## Common Questions
-
-**Q: Do I need to test every single element?**
-A: Test 1-2 examples of each event type. If "cta_click" works for one button, it should work for all CTAs.
-
-**Q: How long does it take to test everything?**
-A: 15-30 minutes for comprehensive testing across all 3 tiers.
-
-**Q: Can I skip GTM Preview and just test in GA4?**
-A: No. GTM Preview helps debug tag firing issues. Skipping it makes debugging harder.
-
-**Q: What if events work in Preview but not after publishing?**
-A: Clear cache and wait 5 minutes for GTM container to propagate. Published container can take time to update.
-
-**Q: Do I need to test in different browsers?**
-A: DataLayer events work across all browsers. Test in one browser (Chrome recommended) for validation.
+- `references/debugging-guide.md` - Extended issue diagnosis
+- `references/test-checklist.md` - Printable checklist template
+- `examples/sample.md` - Example test run output showing PASS/FAIL/WARN format and common failure fixes
+- Related skills: `gtm-implementation`, `gtm-analytics-audit`, `gtm-reporting`

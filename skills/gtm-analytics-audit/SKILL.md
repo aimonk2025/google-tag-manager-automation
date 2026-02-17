@@ -415,6 +415,7 @@ Use this decision tree for ambiguous elements:
 ## Reference Files
 
 - `references/naming-conventions.md` - Analytics ID/class naming standards (load if user asks about naming)
+- `examples/sample.md` - Example audit output showing expected format and audit-report.json structure
 
 ## Common Questions
 

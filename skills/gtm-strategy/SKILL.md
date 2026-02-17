@@ -763,6 +763,11 @@ Before generating tracking plan:
 - [ ] gtm-tracking-plan.json generated
 - [ ] Next steps communicated
 
+## Supporting Files
+
+- `template.md` - Blank tracking plan template to fill in during discovery questions
+- `examples/sample.md` - Example strategy session output and gtm-tracking-plan.json format
+
 ## Output Files
 
 **gtm-tracking-plan.json** - Machine-readable tracking specification for gtm-implementation skill

@@ -527,6 +527,10 @@ Container details:
 - [ ] API connection tested successfully
 - [ ] gtm-token.json added to .gitignore
 
+## Supporting Files
+
+- `examples/sample.md` - Example setup session showing each phase output and files created
+
 ## Output Files
 
 - **gtm-credentials.json** - OAuth 2.0 client credentials
