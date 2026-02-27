@@ -1,5 +1,7 @@
 # Google Tag Manager Automation Skills
 
+**Version 2.0**
+
 A comprehensive GTM automation toolkit for Claude Code that streamlines analytics implementation from audit to reporting.
 
 ## Overview
@@ -146,6 +148,7 @@ Automates GTM API configuration:
 - Guides OAuth credential creation step-by-step
 - Handles token management and .gitignore updates
 - Validates API connection and permissions
+- Does not store `workspaceId` in `gtm-config.json` - the workspace is always resolved dynamically at runtime
 
 **Trigger phrases**: "set up GTM API", "configure GTM access", "get GTM credentials"
 
@@ -154,6 +157,7 @@ Automates GTM API configuration:
 Implements complete tracking end-to-end:
 
 - Adds `dataLayer.push()` calls to components (reads from gtm-tracking-plan.json)
+- Resolves the active GTM workspace dynamically via the API before every operation (no hardcoded workspace ID)
 - Creates GTM Data Layer Variables, Custom Event Triggers, and GA4 Event Tags via API
 - Creates a new versioned GTM container
 - Framework-specific patterns (Next.js App Router requires 'use client', Vue uses @click)
@@ -291,7 +295,7 @@ google-tag-manager-automation/
 | `gtm-tracking-plan.json` | gtm-strategy | Machine-readable event specifications |
 | `gtm-credentials.json` | gtm-setup | OAuth client credentials |
 | `gtm-token.json` | gtm-setup | Access/refresh tokens (add to .gitignore) |
-| `gtm-config.json` | gtm-setup | GTM account and container IDs |
+| `gtm-config.json` | gtm-setup | GTM account and container IDs (no workspaceId - resolved dynamically) |
 | `scripts/test-tracking.js` | gtm-testing | Playwright automated test script |
 | `docs/event-schema.md` | gtm-reporting | Technical event parameter reference |
 | `docs/implementation-summary.md` | gtm-reporting | Technical implementation notes |
