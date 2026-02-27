@@ -149,8 +149,7 @@ Create `gtm-config.json` in project root:
 {
   "accountId": "1234567890",
   "containerId": "12345678",
-  "containerPublicId": "GTM-ABC1234",
-  "workspaceId": "1"
+  "containerPublicId": "GTM-ABC1234"
 }
 ```
 
@@ -158,7 +157,7 @@ Create `gtm-config.json` in project root:
 - `accountId`: 10-digit account ID from Step 5.1
 - `containerId`: Numeric container ID from Step 5.3
 - `containerPublicId`: GTM-XXXXXX format from Step 5.2
-- `workspaceId`: Usually "1" for default workspace
+- `workspaceId` is not stored. The skill resolves it dynamically before each API operation.
 
 ## Troubleshooting
 

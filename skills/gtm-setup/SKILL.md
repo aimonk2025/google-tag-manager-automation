@@ -126,12 +126,13 @@ Generate gtm-config.json:
 {
   "accountId": "[user input]",
   "containerId": "[user input]",
-  "containerPublicId": "[user input]",
-  "workspaceId": "1"
+  "containerPublicId": "[user input]"
 }
 
 Save to project root.
 ```
+
+Note: workspaceId is NOT stored in gtm-config.json. The gtm-implementation skill always resolves the active workspace dynamically via the GTM API. This prevents breakage after you publish a version in the GTM UI, which deletes and recreates the workspace.
 
 ### Phase 5: OAuth Authorization
 
@@ -491,6 +492,10 @@ tagmanager.accounts.containers.get({ path: path_url })
 
 **Issue**: "Token expired"
 → Solution: Run oauth-authorize.js again to get new token
+
+**Issue**: "Workspace not found" / skill creates a new workspace unexpectedly
+→ Cause: GTM deletes workspaces after publishing. A stored workspace ID becomes stale.
+→ Solution: The skill now resolves workspace dynamically. No action needed.
 
 ### Testing
 

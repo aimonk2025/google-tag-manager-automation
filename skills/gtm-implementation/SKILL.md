@@ -62,6 +62,31 @@ For navigation tracking:
 Match found elements against events in tracking plan.
 ```
 
+**Step 1.4: Resolve Active Workspace (Dynamic)**
+
+Before any GTM API operation, always resolve the current workspace dynamically:
+
+```javascript
+// List all workspaces for this container
+const workspacesResponse = await tagmanager.accounts.containers.workspaces.list({
+  parent: `accounts/${accountId}/containers/${containerId}`
+})
+
+const workspaces = workspacesResponse.data.workspace || []
+
+if (workspaces.length === 0) {
+  throw new Error('No workspaces found in this GTM container. Create one in the GTM UI first.')
+}
+
+// Always use the first available workspace
+const workspace = workspaces[0]
+const workspaceId = workspace.workspaceId
+
+console.log(`✓ Active workspace: "${workspace.name}" (ID: ${workspaceId})`)
+```
+
+Why: GTM deletes a workspace after manual submission in the GTM UI and creates a new one with a new ID. The stored `workspaceId` in `gtm-config.json` becomes stale. Never assume a specific workspace ID exists.
+
 ### Phase 2: DataLayer Implementation (Code Changes)
 
 For each event in tracking plan, implement dataLayer.push() in actual code files.
@@ -504,7 +529,7 @@ Total events: 23
 --- GTM Container Configuration ---
 Account: 1234567890
 Container: GTM-ABC1234
-Workspace: Default Workspace
+Workspace: [dynamically resolved name] (ID: [resolved ID])
 
 Created via API:
   ✓ 12 Data Layer Variables
@@ -592,6 +617,16 @@ try {
 - Create all variables first
 - Then create triggers (which may reference variables)
 - Finally create tags (which reference both)
+
+**4. Always Resolve Workspace Dynamically**
+Never use a hardcoded or cached workspaceId. Before any operation, call:
+```javascript
+const workspaces = await tagmanager.accounts.containers.workspaces.list({
+  parent: `accounts/${accountId}/containers/${containerId}`
+})
+const workspaceId = workspaces.data.workspace[0].workspaceId
+```
+GTM deletes and recreates workspaces on each publish, so stored IDs become stale.
 
 ### Parameter Extraction Intelligence
 
@@ -711,3 +746,6 @@ A: Yes. Specify which events to implement (e.g., "only implement cta_click track
 
 **Q: What if my framework isn't supported?**
 A: The dataLayer.push pattern works in any JavaScript environment. We'll provide vanilla JS implementation.
+
+**Q: My workspace ID changed after publishing in GTM. Will the skill break?**
+A: No. The skill always lists available workspaces via the API and uses the first one found, regardless of its ID. You never need to update gtm-config.json after publishing.
