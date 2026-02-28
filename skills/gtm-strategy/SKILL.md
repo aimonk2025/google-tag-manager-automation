@@ -13,45 +13,62 @@ You are a **Product Manager with Analytics & Tracking Expertise**. Your role is 
 
 ## Workflow
 
-### Phase 1: Proactive Codebase Scan (Automatic)
+### Phase 0: Load Business Context (if available)
 
-Before asking any questions, scan the user's codebase to understand what CAN be tracked.
+Check for `gtm-context.md` in the project root:
+- If found: read it silently and use the business context throughout this skill run
+- If not found: proceed normally - ask context questions as usual during the workflow
 
-**Step 1.1: Framework Detection**
+This file is created automatically by gtm-analytics-audit at the end of its first run.
+
+### Phase 1: Load Audit Report or Scan Codebase (Automatic)
+
+Read `audit-report.json` first - only scan if it does not exist.
+
+**Step 1.1: Check for audit-report.json**
 ```
-Check package.json:
-- React, Next.js, Vue version
-- Routing approach (App Router vs Pages Router)
-- Existing analytics libraries (GA4, Segment, etc.)
+Check if audit-report.json exists in the project root.
+
+If audit-report.json EXISTS:
+  Read it - all element and tracking data is already here. No codebase scanning needed.
+  Extract:
+  - metadata.framework → framework and version
+  - summary → total elements, tracking coverage percentage
+  - categorized → CTAs, nav, forms, media, outbound counts and element details
+  - existingTracking.patterns → what is already being tracked
+  - issues → naming and gap analysis already done
+  - recommendations → already prioritized
+  Note: "Using audit-report.json from gtm-analytics-audit"
+
+If audit-report.json NOT FOUND:
+  Note: "audit-report.json not found - scanning codebase directly. Run gtm-analytics-audit first to skip this step in future runs."
+  Check package.json:
+  - React, Next.js, Vue version
+  - Routing approach (App Router vs Pages Router)
+  - Existing analytics libraries (GA4, Segment, etc.)
+  Use Glob to find component files:
+  - app/**/*.tsx (Next.js App Router)
+  - pages/**/*.tsx (Next.js Pages Router)
+  - components/**/*.{tsx,jsx,vue}
+  Use Grep to find analytics-ready elements:
+  - class=".*js-track.*"
+  - id="(cta|nav|form|video)_.*"
+  - window.dataLayer.push
 ```
 
-**Step 1.2: Element Discovery**
-```
-Use Glob to find component files:
-- app/**/*.tsx (Next.js App Router)
-- pages/**/*.tsx (Next.js Pages Router)
-- components/**/*.{tsx,jsx,vue}
-
-Use Grep to find analytics-ready elements:
-- Search for: class=".*js-track.*"
-- Search for: id="(cta|nav|form|video)_.*"
-- Search for: window.dataLayer.push
-```
-
-**Step 1.3: Categorize Found Elements**
+**Step 1.2: Summarize found elements**
 ```
 Count elements by category:
-- CTAs (js-cta class or id starting with "cta_")
-- Navigation (js-nav class or id starting with "nav_")
-- Forms (js-form class or id starting with "form_")
-- Media (js-media class or id starting with "video_" or "audio_")
-- Outbound links (js-outbound class)
-- Downloads (js-download class)
+- CTAs (from audit report categorized.cta or js-cta scan)
+- Navigation (from audit report categorized.nav or js-nav scan)
+- Forms (from audit report categorized.form or js-form scan)
+- Media (from audit report categorized.media or video_/audio_ scan)
+- Outbound links (from audit report categorized.outbound or js-outbound scan)
 ```
 
-**Step 1.4: Existing Tracking Analysis**
+**Step 1.3: Existing Tracking Analysis**
 ```
-Search for existing tracking:
+From audit-report.json existingTracking OR direct scan:
 - window.dataLayer.push calls
 - analytics.track calls
 - Custom tracking implementations
@@ -61,16 +78,16 @@ Identify gaps:
 - Elements WITHOUT any tracking
 ```
 
-**Step 1.5: Present Initial Findings**
+**Step 1.4: Present Initial Findings**
 ```
-Scanning your codebase...
+[Source: audit-report.json / codebase scan]
 
 Found trackable elements:
-✓ 12 buttons/CTAs (using js-track js-cta classes)
-✓ 8 navigation links (using js-track js-nav classes)
-✓ 3 forms (using js-track js-form classes)
-✓ 1 video player (using js-track js-media classes)
-✓ 5 external links (using js-track js-outbound classes)
+✓ 12 buttons/CTAs
+✓ 8 navigation links
+✓ 3 forms
+✓ 1 video player
+✓ 5 external links
 
 Existing tracking:
 ✓ 15 elements already have dataLayer.push()
@@ -149,6 +166,8 @@ Content Pattern:
 ### Phase 3: Business Context Questions (Interactive)
 
 Now that you know WHAT can be tracked, ask WHY it should be tracked.
+
+**Note:** If `gtm-context.md` was loaded in Phase 0, skip questions already answered there and confirm with the user rather than asking from scratch.
 
 **Step 3.1: Primary Goal Clarification**
 ```

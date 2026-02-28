@@ -15,6 +15,14 @@ Transform analytics-ready DOM elements into fully tracked events with:
 
 ## Workflow
 
+### Phase 0: Load Business Context (if available)
+
+Check for `gtm-context.md` in the project root:
+- If found: read it silently and use the business context throughout this skill run
+- If not found: proceed normally - ask context questions as usual during the workflow
+
+This file is created automatically by gtm-analytics-audit at the end of its first run.
+
 ### Phase 1: Context & Prerequisites
 
 **Step 1.1: Load Tracking Plan**

@@ -18,6 +18,14 @@ Transform technical tracking implementation into business-focused documentation 
 
 ## Workflow
 
+### Phase 0: Load Business Context (if available)
+
+Check for `gtm-context.md` in the project root:
+- If found: read it silently and use the business context throughout this skill run (site type, goals, and reporting stakeholders tailor the executive summary tone and report selection)
+- If not found: proceed normally - ask context questions as usual during the workflow
+
+This file is created automatically by gtm-analytics-audit at the end of its first run.
+
 ### Phase 1: Context Loading
 
 **Step 1.1: Load Implementation Details**

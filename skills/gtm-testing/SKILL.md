@@ -20,6 +20,16 @@ Four-tier validation approach, ordered by automation level:
 
 ---
 
+## Phase 0: Load Business Context (if available)
+
+Check for `gtm-context.md` in the project root:
+- If found: read it silently and use the business context throughout this skill run (site type and known gaps help tailor which validation steps to emphasize)
+- If not found: proceed normally
+
+This file is created automatically by gtm-analytics-audit at the end of its first run.
+
+---
+
 ## Tier 0: Automated Playwright Testing (Preferred)
 
 Run this tier first. It requires no browser interaction from the user and can be run entirely by Claude.
