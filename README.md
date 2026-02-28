@@ -318,12 +318,6 @@ js-track js-media js-play js-hero
 - Google Cloud project with Tag Manager API enabled (for API-based skills)
 - GTM container access
 
-## Security Notes
-
-- `gtm-token.json` is automatically added to `.gitignore` by gtm-setup - it contains sensitive tokens
-- `gtm-credentials.json` contains your OAuth client secret - do not commit to public repos
-- Tokens expire after 1 hour but auto-refresh via googleapis
-
 ## License
 
 MIT
