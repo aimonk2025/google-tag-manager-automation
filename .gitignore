@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.env
+
+# Session and database files
+data/gtm-session.json
+data/gtm-engine.db
+data/gtm-engine.db-shm
+data/gtm-engine.db-wal
+gtm-engine.db
+server/gtm-automation.db
+
+# Build outputs
+app/dist/
+server/dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# GTM credentials
+gtm-credentials.json
+gtm-token.json

@@ -1,280 +1,143 @@
-# Google Tag Manager Automation Plugin
+# Google Tag Manager Automation Engine
 
-A comprehensive GTM automation toolkit for Claude Code that streamlines analytics implementation from audit to reporting.
+A local web application that runs AI-powered skills sequentially via the Claude Code CLI to guide developers through a complete Google Tag Manager implementation on any local codebase.
 
-## Overview
+No API keys. No cloud. Runs entirely on your machine using your existing Claude Code subscription.
 
-This plugin provides 7 specialized skills that guide you through the complete GTM implementation lifecycle:
+---
 
-| Skill | Purpose |
-|-------|---------|
-| **gtm-analytics-audit** | Scan codebase for trackable elements and assess analytics readiness |
-| **gtm-dom-standardization** | Standardize IDs and CSS classes for clean analytics tracking |
-| **gtm-strategy** | Plan tracking strategy with business context and event taxonomy |
-| **gtm-setup** | Configure GTM API access with OAuth credentials |
-| **gtm-implementation** | Implement dataLayer events and create GTM configs via API |
-| **gtm-testing** | Validate tracking across browser console, GTM Preview, and GA4 DebugView |
-| **gtm-reporting** | Generate documentation and analyze reporting impact |
+## What it does
 
-## Installation
+Google Tag Manager Automation Engine walks you through a 6-step GTM instrumentation pipeline:
 
-1. Clone the repository:
-```bash
-git clone https://github.com/aimonk2025/google-tag-manager-automation.git
-```
+1. **Audit** - Scans your codebase for all trackable elements (buttons, links, forms, CTAs)
+2. **Prepare Elements** - Adds consistent IDs and data attributes for reliable tracking
+3. **Strategy** - Creates a prioritized event tracking plan (P0/P1/P2 events). Requires inline approval before Implementation unlocks.
+4. **Implementation** - Adds dataLayer pushes and creates GTM tags, triggers, variables
+5. **Testing** - Validates tracking across 3 tiers: code, dataLayer, and GTM
+6. **Reporting** - Generates documentation and implementation summary
 
-2. Copy the `skills` folder to your project's `.claude` directory:
-```bash
-# Navigate to your project
-cd your-project
+Each step runs Claude Code CLI as a subprocess with a specialized SKILL.md system prompt. Context from previous steps is automatically passed forward so Claude understands the full picture at each stage.
 
-# Create .claude directory if it doesn't exist
-mkdir -p .claude
-
-# Copy the skills
-cp -r path/to/google-tag-manager-automation/skills .claude/
-```
-
-Your project structure should look like:
-```
-your-project/
-├── .claude/
-│   └── skills/
-│       ├── gtm-analytics-audit/
-│       ├── gtm-dom-standardization/
-│       ├── gtm-strategy/
-│       ├── gtm-setup/
-│       ├── gtm-implementation/
-│       ├── gtm-testing/
-│       └── gtm-reporting/
-├── src/
-└── ...
-```
-
-## Usage
-
-Once installed, invoke skills by name when working with Claude Code:
-
-```
-"Run gtm-analytics-audit on my codebase"
-"Help me standardize DOM for analytics"
-"Create a GTM tracking strategy"
-"Set up GTM API access"
-"Implement tracking for my CTAs"
-"Test my GTM implementation"
-"Generate tracking documentation"
-```
-
-## Skill Workflow
-
-The skills are designed to be used in sequence:
-
-```
-1. gtm-analytics-audit     Scan codebase, identify trackable elements
-         |
-         v
-2. gtm-dom-standardization Standardize IDs/classes for tracking
-         |
-         v
-3. gtm-strategy            Plan events, parameters, priorities
-         |
-         v
-4. gtm-setup               Configure GTM API credentials
-         |
-         v
-5. gtm-implementation      Add dataLayer events + create GTM configs
-         |
-         v
-6. gtm-testing             Validate across 3 tiers
-         |
-         v
-7. gtm-reporting           Generate docs and stakeholder summaries
-```
-
-## Skill Details
-
-### gtm-analytics-audit
-
-Conducts a comprehensive analytics audit of your codebase:
-
-- Detects framework (React, Next.js, Vue)
-- Scans for clickable elements (buttons, links, forms)
-- Categorizes elements by purpose (CTA, navigation, form, media)
-- Analyzes existing tracking implementation
-- Generates `audit-report.json` with findings
-
-**Trigger phrases**: "audit my analytics", "scan for trackable elements", "what can I track"
-
-### gtm-dom-standardization
-
-Standardizes DOM identifiers for analytics:
-
-- Applies consistent ID naming: `{category}_{location}_{descriptor}`
-- Adds analytics classes: `js-track js-{category} js-{action} js-{location}`
-- Preserves existing visual styling classes
-- Framework-aware (className for React, :class for Vue)
-
-**Trigger phrases**: "standardize analytics classes", "prepare DOM for GTM", "clean up tracking IDs"
-
-### gtm-strategy
-
-Creates strategic tracking plans:
-
-- Proactively scans codebase before asking questions
-- Maps elements to events with parameters
-- Prioritizes events (P0/P1/P2) based on business impact
-- Generates `gtm-tracking-plan.json`
-
-**Trigger phrases**: "plan GTM tracking", "what should I track", "create tracking plan"
-
-### gtm-setup
-
-Automates GTM API configuration:
-
-- Installs googleapis package
-- Guides OAuth credential creation
-- Handles token management
-- Validates API connection
-
-**Trigger phrases**: "set up GTM API", "configure GTM access", "get GTM credentials"
-
-### gtm-implementation
-
-Implements complete tracking:
-
-- Adds `dataLayer.push()` calls to components
-- Creates GTM variables, triggers, and tags via API
-- Supports incremental updates
-- Framework-specific patterns (Next.js, React, Vue)
-
-**Trigger phrases**: "implement GTM tracking", "add dataLayer events", "create GTM tags"
-
-### gtm-testing
-
-Validates tracking implementation:
-
-- **Tier 1**: Browser console (dataLayer verification)
-- **Tier 2**: GTM Preview mode (tag firing)
-- **Tier 3**: GA4 DebugView (end-to-end)
-
-**Trigger phrases**: "test GTM tracking", "validate dataLayer", "debug GTM"
-
-### gtm-reporting
-
-Generates documentation and impact analysis:
-
-- Technical event schema documentation
-- Implementation summary
-- GA4 report configurations
-- Remarketing audience definitions
-- Executive summary for stakeholders
-
-**Trigger phrases**: "document GTM implementation", "what reports can I build", "create stakeholder summary"
-
-## Naming Conventions
-
-### Element IDs
-```
-{category}_{location}_{descriptor}
-
-Examples:
-cta_hero_get_started
-nav_header_pricing
-form_footer_newsletter
-```
-
-### CSS Classes
-```
-js-track js-{category} js-{action} js-{location}
-
-Examples:
-js-track js-cta js-click js-hero
-js-track js-nav js-click js-header
-js-track js-form js-submit js-footer
-```
-
-## File Structure
-
-```
-google-tag-manager-automation/
-├── .claude-plugin/
-│   └── plugin.json
-└── skills/
-    ├── gtm-analytics-audit/
-    │   ├── SKILL.md
-    │   └── references/
-    │       └── naming-conventions.md
-    ├── gtm-dom-standardization/
-    │   ├── SKILL.md
-    │   └── references/
-    │       └── element-patterns.md
-    ├── gtm-strategy/
-    │   └── SKILL.md
-    ├── gtm-setup/
-    │   ├── SKILL.md
-    │   ├── scripts/
-    │   │   ├── install-googleapis.js
-    │   │   ├── oauth-authorize.js
-    │   │   ├── test-connection.js
-    │   │   └── validate-prerequisites.js
-    │   └── references/
-    │       └── google-cloud-setup.md
-    ├── gtm-implementation/
-    │   ├── SKILL.md
-    │   ├── references/
-    │   │   ├── datalayer-patterns.md
-    │   │   └── event-taxonomies.md
-    │   └── assets/templates/
-    │       └── saas.json
-    ├── gtm-testing/
-    │   └── SKILL.md
-    └── gtm-reporting/
-        └── SKILL.md
-```
+---
 
 ## Requirements
 
-- Claude Code CLI
-- Node.js project (for gtm-setup)
-- Google Cloud project with GTM API enabled (for API-based implementation)
-- GTM container access
+- [Claude Code CLI](https://claude.ai/code) installed and authenticated (`claude --version`)
+- Node.js 20+
+- **Mac/Linux:** [gtm-cli](https://github.com/owntag/gtm-cli) for GTM container operations (`npm install -g @owntag/gtm-cli`)
+- **Windows:** A Google Cloud OAuth app (Client ID + Client Secret) for GTM API access via googleapis
 
-## Supported Frameworks
+---
 
-- Next.js (App Router & Pages Router)
-- React
-- Vue
-- Vanilla JavaScript/HTML
+## Quick Start
 
-## Output Files
+```bash
+# Clone the repo
+git clone https://github.com/aimonk2025/google-tag-manager-automation.git
+cd google-tag-manager-automation
 
-The skills generate several output files:
+# Install all dependencies
+npm run install:all
 
-| File | Generated By | Purpose |
-|------|--------------|---------|
-| `audit-report.json` | gtm-analytics-audit | Audit findings |
-| `gtm-tracking-plan.json` | gtm-strategy | Event specifications |
-| `gtm-credentials.json` | gtm-setup | OAuth credentials |
-| `gtm-token.json` | gtm-setup | Access token (gitignore!) |
-| `gtm-config.json` | gtm-setup | GTM account/container config |
-| `gtm-event-schema.md` | gtm-reporting | Technical documentation |
-| `gtm-executive-summary.md` | gtm-reporting | Stakeholder summary |
+# Start the app
+npm run dev
+```
 
-## Security Notes
+Open `http://localhost:5173` in your browser.
 
-- Add `gtm-token.json` to `.gitignore` (contains sensitive tokens)
-- OAuth credentials are for Desktop app type (safe to commit but not recommended)
-- Tokens expire after 1 hour but auto-refresh via googleapis
+---
 
-## Contributing
+## How it works
 
-Contributions welcome! Please submit issues and pull requests to:
-https://github.com/aimonk2025/google-tag-manager-automation
+```
+Browser (React + Vite :5173)
+    |
+    | HTTP + SSE
+    v
+Express Server (:4242)
+    |
+    | spawn subprocess
+    v
+claude --print --output-format stream-json --verbose --append-system-prompt <SKILL.md>
+    |
+    | reads/writes
+    v
+Your local codebase (any path you configure)
+```
 
-## License
+The frontend connects to the Express backend over a Vite proxy. When you click "Run" on any skill screen, the backend spawns the `claude` CLI with the relevant `SKILL.md` as a system prompt, streams the output back via Server-Sent Events, and saves the Claude session ID to SQLite so conversations can be resumed.
 
-MIT
+---
 
-## Author
+## GTM Authentication
 
-aimonk2025
+### Mac / Linux
+Uses `@owntag/gtm-cli`. Install it, then click "Login with Google" on the Setup page.
+
+### Windows
+`@owntag/gtm-cli` is not supported on Windows. Instead:
+
+1. Create a Google Cloud OAuth app and note your Client ID and Client Secret
+2. On the Setup page, enter your Client ID and Client Secret
+3. Click "Login with Google" - Google opens in your browser
+4. After signing in, Google redirects to `localhost:4242/api/gtm/oauth-callback?code=...`
+5. Copy that full URL from your browser address bar and paste it into the field on the Setup page
+6. Click Submit - tokens are saved to the local DB
+
+Client ID and Client Secret are saved to the DB and pre-filled on every visit. You only need to enter them once. Tokens (access + refresh) are stored locally and reused automatically.
+
+---
+
+## Project Structure
+
+```
+google-tag-manager-automation/
+├── app/                    Frontend (React 18 + Vite 5 + Tailwind CSS)
+│   └── src/
+│       ├── context/        SessionContext - shared state across all screens
+│       ├── components/     Layout, ActivityFeed, modals, ApprovalPanel
+│       ├── pages/          One file per screen
+│       ├── hooks/          useSkillRun (SSE), useGtmStatus, useSessionHistory
+│       ├── lib/            api.ts, utils.ts, constants.ts
+│       └── types/          session.ts
+├── server/                 Backend (Express 4 + Node.js + SQLite)
+│   ├── src/
+│   │   ├── routes/         session, skill, files, gtm
+│   │   ├── execute.ts      Claude CLI subprocess spawner + SSE streamer
+│   │   ├── session.ts      Session persistence (SQLite)
+│   │   ├── crypto.ts       AES-256-GCM encryption (disabled by default)
+│   │   └── db.ts           SQLite schema and connection
+│   └── skills/             System prompts for each pipeline step
+│       ├── gtm-analytics-audit/SKILL.md
+│       ├── gtm-dom-standardization/SKILL.md
+│       ├── gtm-strategy/SKILL.md
+│       ├── gtm-implementation/SKILL.md
+│       ├── gtm-testing/SKILL.md
+│       └── gtm-reporting/SKILL.md
+└── docs/                   Design system and reference docs
+```
+
+---
+
+## Development
+
+```bash
+npm run dev          # Start both servers concurrently
+npm run dev:server   # Backend only (port 4242)
+npm run dev:app      # Frontend only (port 5173)
+```
+
+Backend API is at `http://localhost:4242/api`. Frontend proxies `/api` requests to the backend automatically.
+
+---
+
+## Session Persistence
+
+Active session state is stored in SQLite (`gtm-engine.db`). Your session survives server restarts. The DB is git-ignored.
+
+---
+
+## Open Source
+
+MIT License. Built for personal use and open sourced for the community.

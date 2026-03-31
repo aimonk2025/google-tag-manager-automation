@@ -1,0 +1,29 @@
+{
+  "name": "google-tag-manager-engine",
+  "version": "1.0.0",
+  "description": "Local GTM analysis and implementation tool",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:app\"",
+    "dev:server": "cd server && npm run dev",
+    "dev:app": "cd app && npm run dev",
+    "install:all": "npm install && cd server && npm install && cd ../app && npm install",
+    "build": "cd app && npm run build",
+    "eval": "node evals/run.mjs",
+    "eval:save": "node evals/run.mjs --save",
+    "eval:regression": "node evals/run.mjs --save --regression",
+    "eval:nextjs": "node evals/run.mjs --fixture nextjs",
+    "eval:html": "node evals/run.mjs --fixture html",
+    "eval:audit": "node evals/run.mjs gtm-analytics-audit",
+    "eval:dom": "node evals/run.mjs gtm-dom-standardization",
+    "eval:strategy": "node evals/run.mjs gtm-strategy",
+    "eval:impl": "node evals/run.mjs gtm-implementation",
+    "eval:testing": "node evals/run.mjs gtm-testing",
+    "eval:reporting": "node evals/run.mjs gtm-reporting",
+    "improve": "node evals/improve.mjs",
+    "improve:all": "node evals/improve.mjs --all --loops 3"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
