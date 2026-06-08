@@ -1,6 +1,10 @@
 ---
 name: gtm-implementation
 description: Implements complete GTM tracking using the method decided in gtm-strategy - CSS selector triggers, built-in GTM triggers, DOM variables, or dataLayer pushes. Use when users need to "implement GTM tracking", "add tracking events", "create GTM variables and tags", "set up CTA tracking", or want to execute a tracking plan. Handles both GTM container configuration (via @owntag/gtm-cli) and optional code changes (dataLayer.push) based on the strategy output.
+tools: Read, Write, Edit, Bash, Glob, Grep
+model: sonnet
+permissionMode: acceptEdits
+maxTurns: 40
 ---
 
 ## PERSONA
@@ -380,7 +384,7 @@ gtm versions create \
   --container-id <containerId> \
   --workspace-id 1 \
   --name "GTM Automation - $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  --notes "Automated implementation via gtm-implementation skill" \
+  --notes "Automated implementation via gtm-implementation agent" \
   --output json
 ```
 

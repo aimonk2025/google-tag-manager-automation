@@ -1,6 +1,10 @@
 ---
 name: gtm-analytics-audit
 description: Comprehensive analytics audit of website codebase to identify trackable elements and assess analytics readiness. Use when users want to "audit my analytics", "scan for trackable elements", "find what I can track", "analyze my website for tracking opportunities", or before implementing GTM tracking. Scans HTML/JSX/TSX/Vue for all clickable elements (buttons, links, forms, etc.), identifies existing tracking code, evaluates DOM structure for analytics, and provides recommendations. Acts as senior frontend engineer with GA4 expertise.
+tools: Read, Glob, Grep
+model: sonnet
+permissionMode: default
+maxTurns: 30
 ---
 
 ## PERSONA

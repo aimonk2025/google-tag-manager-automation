@@ -169,12 +169,19 @@ export default function AuditPage() {
   const downstreamLabels = PIPELINE_STEPS.slice(skillIdx + 1).map(s => s.label)
 
   const { output, isRunning, error, elapsedMs, activity, retryCount, retryReason, run, cancel } = useSkillRun({
-    onComplete: (claudeSessionId, fullOutput, diskReport) => {
+    onComplete: (claudeSessionId, fullOutput) => {
       if (claudeSessionId) {
-        const report = extractJson(fullOutput) ?? diskReport ?? null
-        markSkillComplete(SKILL_NAME, claudeSessionId, report)
+        // The server already parsed and saved the audit JSON to the database during the run.
+        // Reload from DB rather than trying to parse the raw NDJSON stream here.
         localStorage.setItem(storageKey, fullOutput)
         setSavedOutput(fullOutput)
+        api.getSkillOutput<AuditReport>(SKILL_NAME).then(r => {
+          setReport(r)
+          // Notify session context that the skill is complete with the DB-loaded report
+          markSkillComplete(SKILL_NAME, claudeSessionId, r)
+        }).catch(() => {
+          markSkillComplete(SKILL_NAME, claudeSessionId, null)
+        })
         api.auditCoverage().then(r => setCoverage(r)).catch(() => {})
         fetchResolutionQueue()
       }

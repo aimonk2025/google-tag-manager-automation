@@ -1,6 +1,10 @@
 ---
 name: gtm-strategy
 description: Strategic GTM tracking planning with product manager expertise. Use when users need to plan tracking strategy, define what metrics to measure, understand business impact of tracking, create tracking specifications, or need guidance on "what should I track?" questions. Asks discovery questions about business goals, maps objectives to events, defines event taxonomy, and creates structured tracking plans. Trigger on - "plan GTM tracking", "what should I track", "create tracking plan", "define measurement strategy", "GTM strategy".
+tools: Read
+model: sonnet
+permissionMode: default
+maxTurns: 15
 ---
 
 ## PERSONA

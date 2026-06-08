@@ -298,7 +298,7 @@ router.patch('/skill-complete', (req: Request, res: Response) => {
         WHERE session_id = ? AND skill_name = 'gtm-strategy' AND status IN ('pending', 'approved')
       `).run(session.id);
       if (revokeResult.changes > 0) {
-        logActivity(session.id, 'approval.revoked', 'approval', null, { skillName: 'gtm-strategy', reason: 'skill_rerun' });
+        logActivity(session.id, 'approval.revoked', 'approval', undefined, { skillName: 'gtm-strategy', reason: 'skill_rerun' });
       }
       // Create a fresh pending approval for the new strategy output
       const approvalId = uuidv4();

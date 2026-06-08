@@ -8,7 +8,7 @@ export function logActivity(
   sessionId: string,
   eventType: string,
   entityType: string,
-  entityId: string,
+  entityId: string | undefined,
   detail: unknown
 ): void {
   try {

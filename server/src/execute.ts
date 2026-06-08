@@ -8,10 +8,48 @@ import { getAdapterOrDefault } from './adapters/registry.js';
 import type { ActivityEvent } from './adapters/types.js';
 import { logActivity } from './services/activity.js';
 import { snapshotFileTree } from './services/changeDetector.js';
+import { markSkillComplete } from './session.js';
 
 export type { ActivityEvent };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// ---------------------------------------------------------------------------
+// Parse the audit JSON from a Claude Code CLI output log (NDJSON format).
+// The output_log is a sequence of JSON lines; the actual result text lives in
+// the {"type":"result","result":"..."} line as a string containing a ```json```
+// block. The client-side extractJson cannot see this because it only sees the
+// raw NDJSON stream, not the decoded result string.
+// ---------------------------------------------------------------------------
+export function parseAuditJsonFromOutputLog(outputLog: string): unknown | null {
+  const lines = outputLog.split('\n');
+  for (const line of lines) {
+    if (!line.includes('"type":"result"') && !line.includes('"type": "result"')) continue;
+    try {
+      const obj = JSON.parse(line) as Record<string, unknown>;
+      if (obj.type !== 'result' || typeof obj.result !== 'string') continue;
+      const resultText = obj.result as string;
+      // Try fenced JSON block first
+      const fenced = resultText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (fenced) {
+        try {
+          const parsed = JSON.parse(fenced[1].trim()) as unknown;
+          if (parsed && typeof parsed === 'object' && (parsed as Record<string, unknown>).categorized) return parsed;
+        } catch { /* continue */ }
+      }
+      // Try bare JSON object
+      const start = resultText.indexOf('{');
+      const end = resultText.lastIndexOf('}');
+      if (start !== -1 && end > start) {
+        try {
+          const parsed = JSON.parse(resultText.slice(start, end + 1)) as unknown;
+          if (parsed && typeof parsed === 'object' && (parsed as Record<string, unknown>).categorized) return parsed;
+        } catch { /* continue */ }
+      }
+    } catch { /* skip malformed lines */ }
+  }
+  return null;
+}
 
 // Per-adapter cost calculation (reads from adapter_pricing table)
 function computeCostUsd(adapterType: string, inputTokens: number, outputTokens: number): number {
@@ -53,7 +91,7 @@ export interface RunSkillResult {
   retryCount: number;
 }
 
-// ---- SKILL.md section parsing ----
+// ---- AGENT.md section parsing ----
 
 interface SkillSections {
   PERSONA: string;
@@ -62,6 +100,13 @@ interface SkillSections {
   EXAMPLES: string;
   EDGE_CASES: string;
   RAW: string;
+}
+
+function stripFrontmatter(raw: string): string {
+  if (!raw.startsWith('---')) return raw;
+  const end = raw.indexOf('\n---', 4);
+  if (end === -1) return raw;
+  return raw.slice(end + 4).trimStart();
 }
 
 function parseSkillSections(content: string): SkillSections {
@@ -90,11 +135,11 @@ function selectSkillSections(sections: SkillSections, context: 'first_run' | 're
 }
 
 function readSkillContent(skillName: string, context: 'first_run' | 'retry' | 'rerun' = 'first_run'): string {
-  const skillPath = path.join(SKILLS_DIR, skillName, 'SKILL.md');
+  const skillPath = path.join(SKILLS_DIR, skillName, 'AGENT.md');
   if (!fs.existsSync(skillPath)) {
-    throw new Error(`Skill not found: ${skillName} (looked for ${skillPath})`);
+    throw new Error(`Agent not found: ${skillName} (looked for ${skillPath})`);
   }
-  const raw = fs.readFileSync(skillPath, 'utf-8');
+  const raw = stripFrontmatter(fs.readFileSync(skillPath, 'utf-8'));
   const sections = parseSkillSections(raw);
   return selectSkillSections(sections, context);
 }
@@ -317,13 +362,20 @@ async function attemptSkillRun(opts: {
 
       logActivity(sessionId, 'skill.completed', 'skill_run', skillRunId, { skillName, durationMs, inputTokens, outputTokens, costUsd });
 
-      // Extract and persist coverage signals for gtm-analytics-audit runs
+      // For audit: parse the result JSON from output_log and persist to DB server-side.
+      // This must happen here (not in the route or client) because the client only sees
+      // the raw NDJSON stream and cannot extract the JSON from the result line.
       if (skillName === 'gtm-analytics-audit') {
         try {
+          const auditJson = parseAuditJsonFromOutputLog(outputLog);
+          if (auditJson) {
+            // Persist to session_outputs (source of truth for the UI)
+            markSkillComplete(sessionId, skillName, resolvedSessionId, auditJson);
+          }
+
+          // Also update coverage signals and file snapshot
           const signals = extractCoverageSignals(outputLog, skillName);
           if (signals) {
-            // If the confidence_update wasn't emitted during streaming (e.g. adapter buffers output),
-            // emit it now so the frontend still gets it
             if (!confidenceEmitted && onConfidenceUpdate) {
               onConfidenceUpdate(signals);
             }
@@ -332,7 +384,7 @@ async function attemptSkillRun(opts: {
             try {
               const snapshot = snapshotFileTree(projectPath);
               snapshotJson = JSON.stringify(snapshot);
-            } catch { /* non-fatal - snapshot may fail on large or locked trees */ }
+            } catch { /* non-fatal */ }
 
             db.prepare(`
               UPDATE sessions
@@ -342,7 +394,7 @@ async function attemptSkillRun(opts: {
               WHERE id = ?
             `).run(signals.coveragePct, snapshotJson, sessionId);
           }
-        } catch { /* non-fatal - do not fail the run because of signal extraction */ }
+        } catch { /* non-fatal - do not fail the run */ }
       }
 
       return { claudeSessionId: resolvedSessionId, skillRunId, outputLog };

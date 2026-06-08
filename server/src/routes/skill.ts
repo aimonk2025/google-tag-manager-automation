@@ -77,11 +77,22 @@ router.post('/run', async (req: Request, res: Response) => {
     .get(skillName) as { instructions: string } | undefined;
   const additionalInstructions = instrRow?.instructions ?? '';
 
+  if (additionalInstructions.trim()) {
+    console.log(`[${skillName}] Additional instructions active (${additionalInstructions.length} chars): "${additionalInstructions.slice(0, 120)}${additionalInstructions.length > 120 ? '...' : ''}"`);
+  } else {
+    console.log(`[${skillName}] No additional instructions`);
+  }
+
   let manifest: string;
   let skillContext: string;
   let fullPrompt: string;
   // Scoped manifest — only include files relevant to this skill's scope
-  manifest = buildScopedManifest(skillName, session.projectPath, session, scopedPages);
+  manifest = buildScopedManifest(skillName, session.projectPath, session, scopedPages, additionalInstructions);
+  if (skillName === 'gtm-analytics-audit') {
+    const manifestLines = manifest.split('\n').filter(l => l.trim() && !l.startsWith('PROJECT') && !l.startsWith('Framework') && !l.startsWith('Source'));
+    console.log(`[${skillName}] Manifest scope: ${manifestLines.length} files`);
+    if (manifestLines.length <= 10) console.log(`[${skillName}] Files in scope:`, manifestLines);
+  }
   // Per-skill context builder — pass additionalInstructions so audit can parse page mentions
   skillContext = buildSkillContext(skillName, session, scopedPages, additionalInstructions);
   // Structured prompt with optional additional instructions
@@ -183,22 +194,7 @@ router.post('/run', async (req: Request, res: Response) => {
       } catch { /* non-fatal */ }
     }
 
-    // For audit: if Claude returned no parseable JSON, check if it wrote audit-report.json
-    // to disk (it does this when it has memory from a prior run and skips the JSON block).
-    if (skillName === 'gtm-analytics-audit') {
-      const diskPath = path.join(session.projectPath, 'audit-report.json');
-      if (fs.existsSync(diskPath)) {
-        try {
-          const diskReport = JSON.parse(fs.readFileSync(diskPath, 'utf-8'));
-          if (diskReport && typeof diskReport === 'object' && diskReport.categorized) {
-            send('chunk', { type: 'content', text: '\n\n[Loaded audit-report.json from project directory]' });
-            send('complete', { sessionId: result.claudeSessionId, skillRunId: result.skillRunId, diskReport, score, retryCount: result.retryCount });
-            res.end();
-            return;
-          }
-        } catch { /* ignore parse errors */ }
-      }
-    }
+
 
     send('complete', { sessionId: result.claudeSessionId, skillRunId: result.skillRunId, score, retryCount: result.retryCount });
     res.end();
@@ -477,13 +473,13 @@ router.get('/context/gtm-implementation', (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // Phase 8: scoped manifest — only include files relevant to the current skill
 // ---------------------------------------------------------------------------
-function buildScopedManifest(skillName: string, projectPath: string, session: ReturnType<typeof readSession>, scopedPages?: string[]): string {
+function buildScopedManifest(skillName: string, projectPath: string, session: ReturnType<typeof readSession>, scopedPages?: string[], additionalInstructions?: string): string {
   // Setup and reporting don't need a file list
   if (skillName === 'gtm-reporting') {
     return `Project path: ${projectPath}\n(File scan not required for this step)`;
   }
 
-  // Audit: if scoped pages provided, only list those files — not the full project
+  // Audit: if scoped pages provided via UI, only list those files
   if (skillName === 'gtm-analytics-audit') {
     if (scopedPages && scopedPages.length > 0) {
       return [
@@ -493,6 +489,22 @@ function buildScopedManifest(skillName: string, projectPath: string, session: Re
         ...scopedPages,
       ].join('\n');
     }
+
+    // Audit: if additional instructions restrict scope, only list matched files
+    const isRestrictive = !!(additionalInstructions && /\b(only|just|focus|limit|restrict|solely|exclusively)\b/i.test(additionalInstructions));
+    if (isRestrictive) {
+      const allFiles = getProjectSourceFiles(projectPath);
+      const scoped = extractScopedFilesFromInstructions(additionalInstructions ?? '', allFiles);
+      if (scoped.length > 0) {
+        return [
+          'PROJECT FILES (user-restricted scope — only read these files, do not scan anything else):',
+          `Files to scan: ${scoped.length}`,
+          '',
+          ...scoped,
+        ].join('\n');
+      }
+    }
+
     return buildProjectManifest(projectPath);
   }
 
@@ -570,34 +582,41 @@ function getParentSessionId(skillName: string, session: ReturnType<typeof readSe
 // ---------------------------------------------------------------------------
 // PLAN-07: pre-flight project manifest — fast Node.js scan, no Claude needed
 // ---------------------------------------------------------------------------
-function buildProjectManifest(projectPath: string): string {
-  try {
-    const ignore = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'out', 'coverage', '.cache', '__pycache__']);
-    const sourceExts = new Set(['.tsx', '.ts', '.jsx', '.js', '.vue', '.svelte', '.py', '.rb', '.go', '.java']);
-    const files: string[] = [];
 
-    function walk(dir: string, depth = 0) {
-      if (depth > 6) return;
-      let entries: fs.Dirent[];
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-      for (const entry of entries) {
-        if (ignore.has(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(full, depth + 1);
-        } else if (sourceExts.has(path.extname(entry.name))) {
-          const rel = path.relative(projectPath, full).replace(/\\/g, '/');
-          try {
-            const size = fs.statSync(full).size;
-            files.push(`${rel} (${Math.round(size / 1024 * 10) / 10}KB)`);
-          } catch {
-            files.push(rel);
-          }
-        }
+const SOURCE_IGNORE = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'out', 'coverage', '.cache', '__pycache__']);
+const SOURCE_EXTS = new Set(['.tsx', '.ts', '.jsx', '.js', '.vue', '.svelte', '.py', '.rb', '.go', '.java']);
+
+function walkSourceFiles(projectPath: string): string[] {
+  const files: string[] = [];
+  function walk(dir: string, depth = 0) {
+    if (depth > 6) return;
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (SOURCE_IGNORE.has(entry.name)) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full, depth + 1);
+      } else if (SOURCE_EXTS.has(path.extname(entry.name))) {
+        files.push(path.relative(projectPath, full).replace(/\\/g, '/'));
       }
     }
+  }
+  walk(projectPath);
+  return files;
+}
 
-    walk(projectPath);
+function buildProjectManifest(projectPath: string): string {
+  try {
+    const rawFiles = walkSourceFiles(projectPath);
+    const files = rawFiles.map(rel => {
+      try {
+        const size = fs.statSync(path.join(projectPath, rel)).size;
+        return `${rel} (${Math.round(size / 1024 * 10) / 10}KB)`;
+      } catch {
+        return rel;
+      }
+    });
 
     // Detect framework
     let framework = 'unknown';
@@ -676,8 +695,25 @@ function buildAuditContext(session: ReturnType<typeof readSession>, scopedPages?
     }
   }
 
-  // No previous audit — full scan
+  // No previous audit — full scan (or scoped scan if instructions restrict it)
   if (!prevAudit) {
+    const allFiles = getProjectSourceFiles(session.projectPath);
+    const instructionScoped = extractScopedFilesFromInstructions(additionalInstructions ?? '', allFiles);
+    const isRestrictive = !!(additionalInstructions && /\b(only|just|focus|limit|restrict|solely|exclusively)\b/i.test(additionalInstructions));
+
+    if (isRestrictive && instructionScoped.length > 0) {
+      return [
+        'CONTEXT:',
+        `Project path: ${session.projectPath}`,
+        '',
+        'IMPORTANT: This is a fresh run. Do NOT rely on any previous conversation history or memory.',
+        `The user has restricted the scope. Scan ONLY these ${instructionScoped.length} file(s) — do NOT read any other files:`,
+        ...instructionScoped.map(f => `  - ${f}`),
+        '',
+        'Any previous audit-report.json on disk should be treated as stale and overwritten.',
+      ].join('\n');
+    }
+
     return [
       'CONTEXT:',
       `Project path: ${session.projectPath}`,
@@ -717,7 +753,8 @@ function buildAuditContext(session: ReturnType<typeof readSession>, scopedPages?
   });
 
   // UC4: Additional instructions mention specific pages/files — parse them out
-  const instructionScoped = extractScopedFilesFromInstructions(additionalInstructions ?? '', currentFiles, session.projectPath);
+  const instructionScoped = extractScopedFilesFromInstructions(additionalInstructions ?? '', currentFiles);
+  const isRestrictive = !!(additionalInstructions && /\b(only|just|focus|limit|restrict|solely|exclusively)\b/i.test(additionalInstructions));
 
   // UC4: Explicit scopedPages from frontend (e.g. user picks pages in UI)
   const explicitScoped = (scopedPages ?? []).flatMap(page =>
@@ -728,8 +765,10 @@ function buildAuditContext(session: ReturnType<typeof readSession>, scopedPages?
     })
   );
 
-  // Merge all files that need re-scanning, deduplicated
-  const toRescan = [...new Set([...newFiles, ...modifiedFiles, ...instructionScoped, ...explicitScoped])];
+  // If user is restricting scope, only scan exactly those files — ignore new/modified outside that scope
+  const toRescan = isRestrictive && (instructionScoped.length > 0 || explicitScoped.length > 0)
+    ? [...new Set([...instructionScoped, ...explicitScoped])]
+    : [...new Set([...newFiles, ...modifiedFiles, ...instructionScoped, ...explicitScoped])];
 
   // Apply deleted files: remove their elements from the baseline before returning
   const patchedAudit = deletedFiles.length > 0
@@ -823,11 +862,9 @@ function removeDeletedFilesFromAudit(report: Record<string, unknown>, deletedFil
     });
     const removed = before - cat.elements.length;
     if (removed > 0) {
-      const trackedRemoved = before - cat.elements.filter(e => e.tracking).length - cat.elements.filter(e => !e.tracking).length;
       cat.total = Math.max(0, cat.total - removed);
       cat.tracked = cat.elements.filter(e => e.tracking).length;
       cat.untracked = cat.elements.filter(e => !e.tracking).length;
-      void trackedRemoved;
     }
   }
 
@@ -855,7 +892,7 @@ function removeDeletedFilesFromAudit(report: Record<string, unknown>, deletedFil
  * Parses additional instructions text for page names or file path hints.
  * Maps them to actual files in the project.
  */
-function extractScopedFilesFromInstructions(instructions: string, currentFiles: string[], projectPath: string): string[] {
+function extractScopedFilesFromInstructions(instructions: string, currentFiles: string[]): string[] {
   if (!instructions.trim()) return [];
 
   // Extract quoted strings, path-like tokens, and words after "rescan"/"re-scan"/"scan"/"check"
@@ -863,6 +900,9 @@ function extractScopedFilesFromInstructions(instructions: string, currentFiles: 
 
   // Quoted strings: "pricing page", 'checkout'
   for (const m of instructions.matchAll(/["']([^"']+)["']/g)) tokens.add(m[1].toLowerCase());
+
+  // URL/route paths: /tag-manager-engine, /pricing, /about/team etc.
+  for (const m of instructions.matchAll(/\/([a-z0-9][a-z0-9\-_\/]*)/gi)) tokens.add(m[1].toLowerCase());
 
   // Words after scan/rescan/check keywords
   for (const m of instructions.matchAll(/(?:re-?scan|check|audit|scan)\s+(?:the\s+)?([a-z0-9\/\-_]+(?:\s+(?:and|page|pages)\s+[a-z0-9\/\-_]+)*)/gi)) {
@@ -888,34 +928,12 @@ function extractScopedFilesFromInstructions(instructions: string, currentFiles: 
     }
   }
 
-  void projectPath;
   return [...matched];
 }
 
-// Returns all source file paths relative to projectPath (same logic as buildProjectManifest but paths only)
 function getProjectSourceFiles(projectPath: string): string[] {
   try {
-    const ignore = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'out', 'coverage', '.cache', '__pycache__']);
-    const sourceExts = new Set(['.tsx', '.ts', '.jsx', '.js', '.vue', '.svelte', '.py', '.rb', '.go', '.java']);
-    const files: string[] = [];
-
-    function walk(dir: string, depth = 0) {
-      if (depth > 6) return;
-      let entries: import('fs').Dirent[];
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-      for (const entry of entries) {
-        if (ignore.has(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(full, depth + 1);
-        } else if (sourceExts.has(path.extname(entry.name))) {
-          files.push(path.relative(projectPath, full).replace(/\\/g, '/'));
-        }
-      }
-    }
-
-    walk(projectPath);
-    return files.slice(0, 200);
+    return walkSourceFiles(projectPath).slice(0, 200);
   } catch {
     return [];
   }
@@ -1267,8 +1285,6 @@ function assemblePrompt(skillName: string, manifest: string, skillContext: strin
   // Use backend-owned default if frontend sent no/empty task prompt
   const resolvedTaskPrompt = taskPrompt?.trim() ? taskPrompt : (DEFAULT_TASK_PROMPTS[skillName] ?? taskPrompt);
 
-  // For audit (step 1), include the manifest so it knows what files exist.
-  // For all other skills, the manifest tells Claude what NOT to re-scan.
   const manifestSection = skillName === 'gtm-analytics-audit'
     ? `PROJECT FILES (scan these for tracking elements):\n${manifest}`
     : `PROJECT FILES (reference only — do not re-scan unless scoped below):\n${manifest}`;

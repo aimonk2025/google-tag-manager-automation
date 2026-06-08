@@ -38,10 +38,15 @@ export function AdditionalInstructions({ skillName }: AdditionalInstructionsProp
 
   if (loading) return null
 
+  const isActive = text.trim().length > 0
+
   return (
-    <div className="border border-border">
+    <div className={`border ${isActive ? 'border-foreground/30' : 'border-border'}`}>
       <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-1.5">
+          {isActive && (
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" title="Instructions active — will be used on next run" />
+          )}
           <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
             Additional Instructions
           </span>
@@ -69,7 +74,7 @@ export function AdditionalInstructions({ skillName }: AdditionalInstructionsProp
           onClick={handleSave}
           className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
         >
-          {saved ? 'Saved' : 'Save'}
+          {saved ? 'Saved ✓' : 'Save'}
         </button>
       </div>
       <textarea
